@@ -1,0 +1,355 @@
+---
+title: "Tarea 4 Variables Aleatorias Discretas"
+author: "Luis Manuel Duran"
+format: html
+editor: visual
+---
+
+```{r}
+# ==============================================================================
+# TAREA 5: ESTADÍSTICA APLICADA - DISTRIBUCIONES DISCRETAS DE PROBABILIDAD
+# ==============================================================================
+# En este script resuelvo los ejercicios de la Tarea 5 analizando las 6 
+# distribuciones discretas principales. Para cada tema incluyo su parte teórica, 
+# gráficas de densidad (PMF) y acumulada (CDF), junto con 3 ejercicios resueltos 
+# comparando el cálculo teórico vs simulación montecarlo en R.
+# ==============================================================================
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(gridExtra)
+
+# Fijo la semilla para que mis simulaciones sean reproducibles
+set.seed(42)
+
+# Configuro un tema limpio en ggplot2 para mis gráficas
+theme_set(theme_minimal() + 
+            theme(plot.title = element_text(face = "bold", size = 11, hjust = 0.5),
+                  axis.title = element_text(face = "bold"),
+                  panel.grid.minor = element_blank()))
+
+
+# ==============================================================================
+# 1. DISTRIBUCIÓN UNIFORME DISCRETA
+# ==============================================================================
+# Parámetros: k valores equiprobables en {a, a+1, ..., b}, donde n = b - a + 1.
+# Media E[X] = (a + b) / 2 | Varianza Var(X) = ((b - a + 1)^2 - 1) / 12
+# Como R no trae funciones nativas dunifdis/punifdis, programo mis propias funciones:
+
+dunifdis <- function(x, a, b) ifelse(x >= a & x <= b & x == round(x), 1 / (b - a + 1), 0)
+punifdis <- function(x, a, b) ifelse(x < a, 0, ifelse(x >= b, 1, (floor(x) - a + 1) / (b - a + 1)))
+
+# Genero los datos para graficar la PMF y CDF del caso base U(1, 6)
+df_unif <- data.frame(x = 1:6) %>%
+  mutate(PMF = dunifdis(x, 1, 6), CDF = punifdis(x, 1, 6))
+
+p1_pmf <- ggplot(df_unif, aes(x = factor(x), y = PMF)) +
+  geom_col(fill = "steelblue", alpha = 0.8, width = 0.5) +
+  labs(title = "PMF - Uniforme Discreta U(1, 6)", x = "x", y = "P(X = x)")
+
+p1_cdf <- ggplot(df_unif, aes(x = x, y = CDF)) +
+  geom_step(color = "darkblue", size = 1) + geom_point(color = "darkblue", size = 2) +
+  labs(title = "CDF - Uniforme Discreta U(1, 6)", x = "x", y = "F(x)")
+
+grid.arrange(p1_pmf, p1_cdf, ncol = 2)
+
+# --- Ejercicio 1.1: Control de Calidad ---
+# Un inspector elige al azar un lote del 1 al 6. ¿Cuál es la probabilidad de inspeccionar el lote 3 o menor?
+a1 <- 1; b1 <- 6
+prob_e11 <- punifdis(3, a1, b1)
+sim_e11 <- sample(a1:b1, size = 10000, replace = TRUE)
+mean_sim_e11 <- mean(sim_e11 <= 3)
+cat("Ex 1.1 - P(X <= 3): Teórico =", prob_e11, "| Muestral =", mean_sim_e11, "\n")
+
+# --- Ejercicio 1.2: Finanzas / Asignación de Portafolios ---
+# Un algoritmo asigna al azar tipos de activos numerados del 1 al 10. ¿Probabilidad de asignar el activo 7?
+a2 <- 1; b2 <- 10
+prob_e12 <- dunifdis(7, a2, b2)
+sim_e12 <- sample(a2:b2, size = 10000, replace = TRUE)
+mean_sim_e12 <- mean(sim_e12 == 7)
+cat("Ex 1.2 - P(X = 7): Teórico =", prob_e12, "| Muestral =", mean_sim_e12, "\n")
+
+# --- Ejercicio 1.3: Servicios / Ventanillas ---
+# Se asignan clientes a 8 ventanillas equiprobables. ¿Probabilidad de caer en ventanillas de la 4 a la 6?
+a3 <- 1; b3 <- 8
+prob_e13 <- punifdis(6, a3, b3) - punifdis(3, a3, b3)
+sim_e13 <- sample(a3:b3, size = 10000, replace = TRUE)
+mean_sim_e13 <- mean(sim_e13 >= 4 & sim_e13 <= 6)
+cat("Ex 1.3 - P(4 <= X <= 6): Teórico =", prob_e13, "| Muestral =", mean_sim_e13, "\n")
+
+# Grafico las ventanillas de interés para resaltar la probabilidad
+df_e13 <- data.frame(x = 1:8) %>% mutate(Destacado = ifelse(x >= 4 & x <= 6, "Sí", "No"))
+ggplot(df_e13, aes(x = factor(x), y = 1/8, fill = Destacado)) +
+  geom_col(alpha = 0.8, width = 0.6) +
+  scale_fill_manual(values = c("No" = "gray70", "Sí" = "coral")) +
+  labs(title = "Ex 1.3: Asignación de Ventanillas P(4 <= X <= 6)", x = "Ventanilla", y = "Probabilidad")
+
+
+# ==============================================================================
+# 2. DISTRIBUCIONES BERNOULLI Y BINOMIAL
+# ==============================================================================
+# Parámetros: n (número de ensayos independientes), p (probabilidad de éxito).
+# Media E[X] = n*p | Varianza Var(X) = n*p*(1-p)
+# Usando funciones integradas de R: dbinom(), pbinom(), rbinom()
+
+df_binom <- data.frame(x = 0:10) %>%
+  mutate(PMF = dbinom(x, size = 10, prob = 0.3), CDF = pbinom(x, size = 10, prob = 0.3))
+
+p2_pmf <- ggplot(df_binom, aes(x = factor(x), y = PMF)) +
+  geom_col(fill = "forestgreen", alpha = 0.8, width = 0.6) +
+  labs(title = "PMF - Binomial B(n=10, p=0.3)", x = "Éxitos (x)", y = "P(X = x)")
+
+p2_cdf <- ggplot(df_binom, aes(x = x, y = CDF)) +
+  geom_step(color = "darkgreen", size = 1) + geom_point(color = "darkgreen", size = 2) +
+  labs(title = "CDF - Binomial B(n=10, p=0.3)", x = "Éxitos (x)", y = "F(x)")
+
+grid.arrange(p2_pmf, p2_cdf, ncol = 2)
+
+# --- Ejercicio 2.1: Manufactura ---
+# Inspección de n = 20 piezas con probabilidad de defecto p = 0.05. Probabilidad de hallarse 2 o más defectuosas.
+n21 <- 20; p21 <- 0.05
+prob_e21 <- 1 - pbinom(1, size = n21, prob = p21)
+sim_e21 <- rbinom(10000, size = n21, prob = p21)
+mean_sim_e21 <- mean(sim_e21 >= 2)
+cat("Ex 2.1 - P(X >= 2): Teórico =", prob_e21, "| Muestral =", mean_sim_e21, "\n")
+
+# --- Ejercicio 2.2: Finanzas / Créditos ---
+# Se evalúan n = 15 solicitudes con tasa de aprobación del 60% (p = 0.60). Probabilidad de aprobar 10 exactas.
+n22 <- 15; p22 <- 0.60
+prob_e22 <- dbinom(10, size = n22, prob = p22)
+sim_e22 <- rbinom(10000, size = n22, prob = p22)
+mean_sim_e22 <- mean(sim_e22 == 10)
+cat("Ex 2.2 - P(X = 10): Teórico =", prob_e22, "| Muestral =", mean_sim_e22, "\n")
+
+# --- Ejercicio 2.3: Control de Calidad ---
+# Se prueban 12 componentes con p_falla = 0.15. Probabilidad de que a lo sumo 3 fallen.
+n23 <- 12; p23 <- 0.15
+prob_e23 <- pbinom(3, size = n23, prob = p23)
+sim_e23 <- rbinom(10000, size = n23, prob = p23)
+mean_sim_e23 <- mean(sim_e23 <= 3)
+cat("Ex 2.3 - P(X <= 3): Teórico =", prob_e23, "| Muestral =", mean_sim_e23, "\n")
+
+# Visualización para resaltar el caso de 2 o más defectuosas
+df_e21 <- data.frame(x = 0:10) %>% 
+  mutate(prob = dbinom(x, n21, p21), Destacado = ifelse(x >= 2, ">= 2 Defectos", "< 2 Defectos"))
+ggplot(df_e21, aes(x = factor(x), y = prob, fill = Destacado)) +
+  geom_col(alpha = 0.8, width = 0.6) +
+  scale_fill_manual(values = c("< 2 Defectos" = "gray70", ">= 2 Defectos" = "firebrick")) +
+  labs(title = "Ex 2.1: Defectos en Manufactura B(20, 0.05)", x = "Piezas Defectuosas", y = "Probabilidad")
+
+
+# ==============================================================================
+# 3. DISTRIBUCIÓN GEOMÉTRICA
+# ==============================================================================
+# Parámetros: p (probabilidad de éxito en cada ensayo).
+# OJO: En R (dgeom/rgeom), X representa el número de FRACASOS antes del primer éxito.
+# Media E[X_fracasos] = (1-p)/p | Media E[X_ensayos] = 1/p | Varianza Var(X) = (1-p) / p^2
+
+df_geom <- data.frame(x = 0:10) %>%
+  mutate(PMF = dgeom(x, prob = 0.25), CDF = pgeom(x, prob = 0.25))
+
+p3_pmf <- ggplot(df_geom, aes(x = factor(x), y = PMF)) +
+  geom_col(fill = "purple", alpha = 0.8, width = 0.6) +
+  labs(title = "PMF - Geométrica Geom(p=0.25)", x = "Fracasos previos (x)", y = "P(X = x)")
+
+p3_cdf <- ggplot(df_geom, aes(x = x, y = CDF)) +
+  geom_step(color = "darkpurple", size = 1) + geom_point(color = "darkpurple", size = 2) +
+  labs(title = "CDF - Geométrica Geom(p=0.25)", x = "Fracasos previos (x)", y = "F(x)")
+
+grid.arrange(p3_pmf, p3_cdf, ncol = 2)
+
+# --- Ejercicio 3.1: Servicios / Call Center ---
+# p_conectar = 0.20. ¿Probabilidad de lograr la conexión exactamente en el 4to intento (3 fracasos antes)?
+p31 <- 0.20
+prob_e31 <- dgeom(3, prob = p31)
+sim_e31 <- rgeom(10000, prob = p31)
+mean_sim_e31 <- mean(sim_e31 == 3)
+cat("Ex 3.1 - P(Éxito en intento 4): Teórico =", prob_e31, "| Muestral =", mean_sim_e31, "\n")
+
+# --- Ejercicio 3.2: Control de Calidad ---
+# p_defectuosa = 0.08. ¿Probabilidad de requerir más de 5 inspecciones para ver una defectuosa (más de 4 fracasos)?
+p32 <- 0.08
+prob_e32 <- 1 - pgeom(4, prob = p32)
+sim_e32 <- rgeom(10000, prob = p32)
+mean_sim_e32 <- mean(sim_e32 > 4)
+cat("Ex 3.2 - P(Ensayos > 5): Teórico =", prob_e32, "| Muestral =", mean_sim_e32, "\n")
+
+# --- Ejercicio 3.3: Ventas ---
+# p_venta = 0.15. ¿Probabilidad de hacer la primera venta en los primeros 3 intentos (a lo sumo 2 fracasos)?
+p33 <- 0.15
+prob_e33 <- pgeom(2, prob = p33)
+sim_e33 <- rgeom(10000, prob = p33)
+mean_sim_e33 <- mean(sim_e33 <= 2)
+cat("Ex 3.3 - P(Ensayos <= 3): Teórico =", prob_e33, "| Muestral =", mean_sim_e33, "\n")
+
+# Grafico los intentos destacando los primeros 3 ensayos
+df_e33 <- data.frame(x = 0:10) %>% 
+  mutate(prob = dgeom(x, p33), Destacado = ifelse(x <= 2, "<= 3 Ensayos", "> 3 Ensayos"))
+ggplot(df_e33, aes(x = factor(x + 1), y = prob, fill = Destacado)) +
+  geom_col(alpha = 0.8, width = 0.6) +
+  scale_fill_manual(values = c("<= 3 Ensayos" = "purple", "> 3 Ensayos" = "gray70")) +
+  labs(title = "Ex 3.3: Intento de Primera Venta Geom(0.15)", x = "Número de Intento", y = "Probabilidad")
+
+
+# ==============================================================================
+# 4. DISTRIBUCIÓN BINOMIAL NEGATIVA
+# ==============================================================================
+# Parámetros: r (número de éxitos requeridos), p (probabilidad de éxito por ensayo).
+# Nota: En R (dnbinom/pnbinom), X me cuenta los FRACASOS necesarios antes del r-ésimo éxito.
+# Media E[X_fracasos] = r*(1-p)/p | Varianza Var(X) = r*(1-p) / p^2
+
+df_nbinom <- data.frame(x = 0:15) %>%
+  mutate(PMF = dnbinom(x, size = 3, prob = 0.4), CDF = pnbinom(x, size = 3, prob = 0.4))
+
+p4_pmf <- ggplot(df_nbinom, aes(x = factor(x), y = PMF)) +
+  geom_col(fill = "darkorange", alpha = 0.8, width = 0.6) +
+  labs(title = "PMF - Binomial Negativa NB(r=3, p=0.4)", x = "Fracasos previos (x)", y = "P(X = x)")
+
+p4_cdf <- ggplot(df_nbinom, aes(x = x, y = CDF)) +
+  geom_step(color = "brown", size = 1) + geom_point(color = "brown", size = 2) +
+  labs(title = "CDF - Binomial Negativa NB(r=3, p=0.4)", x = "Fracasos previos (x)", y = "F(x)")
+
+grid.arrange(p4_pmf, p4_cdf, ncol = 2)
+
+# --- Ejercicio 4.1: Control de Calidad ---
+# Quiero encontrar r = 3 piezas defectuosas (p = 0.10). ¿Probabilidad de revisar exactamente 15 piezas no defectuosas antes?
+r41 <- 3; p41 <- 0.10
+prob_e41 <- dnbinom(15, size = r41, prob = p41)
+sim_e41 <- rnbinom(10000, size = r41, prob = p41)
+mean_sim_e41 <- mean(sim_e41 == 15)
+cat("Ex 4.1 - P(Fracasos = 15): Teórico =", prob_e41, "| Muestral =", mean_sim_e41, "\n")
+
+# --- Ejercicio 4.2: Servicios / Recursos Humanos ---
+# Busco r = 4 candidatos aptos (p = 0.30). Probabilidad de tener que hacer 10 o menos entrevistas en total (fracasos <= 6).
+r42 <- 4; p42 <- 0.30
+prob_e42 <- pnbinom(6, size = r42, prob = p42)
+sim_e42 <- rnbinom(10000, size = r42, prob = p42)
+mean_sim_e42 <- mean(sim_e42 <= 6)
+cat("Ex 4.2 - P(Total <= 10): Teórico =", prob_e42, "| Muestral =", mean_sim_e42, "\n")
+
+# --- Ejercicio 4.3: Finanzas / Ventas ---
+# Necesito captar r = 2 clientes VIP (p = 0.25). Probabilidad de acumular más de 5 rechazos antes de lograrlo.
+r43 <- 2; p43 <- 0.25
+prob_e43 <- 1 - pnbinom(5, size = r43, prob = p43)
+sim_e43 <- rnbinom(10000, size = r43, prob = p43)
+mean_sim_e43 <- mean(sim_e43 > 5)
+cat("Ex 4.3 - P(Fracasos > 5): Teórico =", prob_e43, "| Muestral =", mean_sim_e43, "\n")
+
+# Visualización para las entrevistas totales del Ejercicio 4.2
+df_e42 <- data.frame(x = 0:15) %>% 
+  mutate(prob = dnbinom(x, size = r42, prob = p42), Destacado = ifelse(x <= 6, "<= 10 Entrevistas", "> 10 Entrevistas"))
+ggplot(df_e42, aes(x = factor(x + r42), y = prob, fill = Destacado)) +
+  geom_col(alpha = 0.8, width = 0.6) +
+  scale_fill_manual(values = c("<= 10 Entrevistas" = "darkorange", "> 10 Entrevistas" = "gray70")) +
+  labs(title = "Ex 4.2: Entrevistas para 4 Candidatos Aptos NB(4, 0.30)", x = "Entrevistas Totales", y = "Probabilidad")
+
+
+# ==============================================================================
+# 5. DISTRIBUCIÓN HIPERGEOMÉTRICA
+# ==============================================================================
+# Muestreo sin reemplazo de una población finita.
+# Parámetros en R (dhyper): m (éxitos en población), n (fracasos en población), k (muestra).
+# Media E[X] = k * (m / (m + n))
+# Varianza Var(X) = k * (m / N) * (1 - m/N) * ((N - k) / (N - 1))  donde N = m + n
+
+df_hyper <- data.frame(x = 0:10) %>%
+  mutate(PMF = dhyper(x, m = 20, n = 80, k = 10), CDF = phyper(x, m = 20, n = 80, k = 10))
+
+p5_pmf <- ggplot(df_hyper, aes(x = factor(x), y = PMF)) +
+  geom_col(fill = "teal", alpha = 0.8, width = 0.6) +
+  labs(title = "PMF - Hipergeométrica Hyper(m=20, n=80, k=10)", x = "Éxitos muestrales (x)", y = "P(X = x)")
+
+p5_cdf <- ggplot(df_hyper, aes(x = x, y = CDF)) +
+  geom_step(color = "darkteal", size = 1) + geom_point(color = "darkteal", size = 2) +
+  labs(title = "CDF - Hipergeométrica Hyper(m=20, n=80, k=10)", x = "Éxitos muestrales (x)", y = "F(x)")
+
+grid.arrange(p5_pmf, p5_cdf, ncol = 2)
+
+# --- Ejercicio 5.1: Control de Calidad ---
+# Lote N = 50 piezas (m = 8 defectuosas, n_pobl = 42 buenas). Se toma una muestra k = 5. ¿Probabilidad de 2 defectuosas?
+m51 <- 8; n51 <- 42; k51 <- 5
+prob_e51 <- dhyper(2, m = m51, n = n51, k = k51)
+sim_e51 <- rhyper(10000, m = m51, n = n51, k = k51)
+mean_sim_e51 <- mean(sim_e51 == 2)
+cat("Ex 5.1 - P(X = 2): Teórico =", prob_e51, "| Muestral =", mean_sim_e51, "\n")
+
+# --- Ejercicio 5.2: Auditoría Financiera ---
+# N = 30 facturas (m = 6 con errores, n_pobl = 24 bien). Reviso k = 6. ¿Probabilidad de hallar al menos 1 con error?
+m52 <- 6; n52 <- 24; k52 <- 6
+prob_e52 <- 1 - phyper(0, m = m52, n = n52, k = k52)
+sim_e52 <- rhyper(10000, m = m52, n = n52, k = k52)
+mean_sim_e52 <- mean(sim_e52 >= 1)
+cat("Ex 5.2 - P(X >= 1): Teórico =", prob_e52, "| Muestral =", mean_sim_e52, "\n")
+
+# --- Ejercicio 5.3: Selección de Personal ---
+# N = 20 profesionales (12 ingenieros, 8 economistas). Se eligen k = 4. ¿Probabilidad de incluir 2 ingenieros exactos?
+m53 <- 12; n53 <- 8; k53 <- 4
+prob_e53 <- dhyper(2, m = m53, n = n53, k = k53)
+sim_e53 <- rhyper(10000, m = m53, n = n53, k = k53)
+mean_sim_e53 <- mean(sim_e53 == 2)
+cat("Ex 5.3 - P(X = 2): Teórico =", prob_e53, "| Muestral =", mean_sim_e53, "\n")
+
+# Gráfica para destacar facturas con error en la muestra de auditoría
+df_e52 <- data.frame(x = 0:6) %>% 
+  mutate(prob = dhyper(x, m52, n52, k52), Destacado = ifelse(x >= 1, "Con error", "Sin error"))
+ggplot(df_e52, aes(x = factor(x), y = prob, fill = Destacado)) +
+  geom_col(alpha = 0.8, width = 0.6) +
+  scale_fill_manual(values = c("Sin error" = "gray70", "Con error" = "teal")) +
+  labs(title = "Ex 5.2: Auditoría de Facturas con Error", x = "Facturas Erróneas en Muestra", y = "Probabilidad")
+
+
+# ==============================================================================
+# 6. DISTRIBUCIÓN DE POISSON
+# ==============================================================================
+# Ocurrencia de eventos raros en un intervalo continuo de tiempo o espacio.
+# Parámetro: lambda (promedio de ocurrencias por unidad de medida).
+# Media E[X] = lambda | Varianza Var(X) = lambda
+# Funciones R: dpois(), ppois(), rpois()
+
+df_pois <- data.frame(x = 0:15) %>%
+  mutate(PMF = dpois(x, lambda = 4.5), CDF = ppois(x, lambda = 4.5))
+
+p6_pmf <- ggplot(df_pois, aes(x = factor(x), y = PMF)) +
+  geom_col(fill = "firebrick", alpha = 0.8, width = 0.6) +
+  labs(title = "PMF - Poisson Pois(lambda=4.5)", x = "Ocurrencias (x)", y = "P(X = x)")
+
+p6_cdf <- ggplot(df_pois, aes(x = x, y = CDF)) +
+  geom_step(color = "darkred", size = 1) + geom_point(color = "darkred", size = 2) +
+  labs(title = "CDF - Poisson Pois(lambda=4.5)", x = "Ocurrencias (x)", y = "F(x)")
+
+grid.arrange(p6_pmf, p6_cdf, ncol = 2)
+
+# --- Ejercicio 6.1: Servicios Bancarios ---
+# Llegan en promedio lambda = 6 clientes por hora. ¿Probabilidad de que en una hora lleguen exactamente 8?
+l61 <- 6
+prob_e61 <- dpois(8, lambda = l61)
+sim_e61 <- rpois(10000, lambda = l61)
+mean_sim_e61 <- mean(sim_e61 == 8)
+cat("Ex 6.1 - P(X = 8): Teórico =", prob_e61, "| Muestral =", mean_sim_e61, "\n")
+
+# --- Ejercicio 6.2: Manufactura ---
+# Se observa una media de lambda = 1.2 defectos por metro de cable. ¿Probabilidad de hallar 3 o más defectos?
+l62 <- 1.2
+prob_e62 <- 1 - ppois(2, lambda = l62)
+sim_e62 <- rpois(10000, lambda = l62)
+mean_sim_e62 <- mean(sim_e62 >= 3)
+cat("Ex 6.2 - P(X >= 3): Teórico =", prob_e62, "| Muestral =", mean_sim_e62, "\n")
+
+# --- Ejercicio 6.3: Sistemas / Redes ---
+# Un servidor web recibe lambda = 3 peticiones por minuto. ¿Probabilidad de recibir entre 2 y 5 peticiones inclusivo?
+l63 <- 3
+prob_e63 <- ppois(5, lambda = l63) - ppois(1, lambda = l63)
+sim_e63 <- rpois(10000, lambda = l63)
+mean_sim_e63 <- mean(sim_e63 >= 2 & sim_e63 <= 5)
+cat("Ex 6.3 - P(2 <= X <= 5): Teórico =", prob_e63, "| Muestral =", mean_sim_e63, "\n")
+
+# Visualización del rango de peticiones en el servidor
+df_e63 <- data.frame(x = 0:10) %>% 
+  mutate(prob = dpois(x, lambda = l63), Destacado = ifelse(x >= 2 & x <= 5, "Entre 2 y 5", "Otro"))
+ggplot(df_e63, aes(x = factor(x), y = prob, fill = Destacado)) +
+  geom_col(alpha = 0.8, width = 0.6) +
+  scale_fill_manual(values = c("Otro" = "gray70", "Entre 2 y 5" = "firebrick")) +
+  labs(title = "Ex 6.3: Solicitudes al Servidor Pois(lambda=3)", x = "Número de Solicitudes", y = "Probabilidad")
+```
+
